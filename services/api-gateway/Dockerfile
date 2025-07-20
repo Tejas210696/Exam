@@ -1,44 +1,61 @@
-FROM node:18-alpine AS builder
+FROM php:8.2-fpm
 
-WORKDIR /app
+# Set working directory
+WORKDIR /var/www/html
 
-# Copy package files
-COPY package*.json ./
-COPY tsconfig*.json ./
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    libpng-dev \
+    libonig-dev \
+    libxml2-dev \
+    libzip-dev \
+    zip \
+    unzip \
+    supervisor \
+    nginx \
+    cron \
+    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
 
-# Install dependencies
-RUN npm ci --only=production && npm cache clean --force
+# Install Redis extension
+RUN pecl install redis && docker-php-ext-enable redis
 
-# Copy source code
-COPY src/ ./src/
+# Install Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Build the application
-RUN npm run build
+# Copy composer files
+COPY composer.json composer.lock ./
 
-# Production stage
-FROM node:18-alpine AS production
+# Install PHP dependencies
+RUN composer install --no-dev --optimize-autoloader --no-scripts
 
-WORKDIR /app
+# Copy application code
+COPY . .
 
-# Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
+# Create storage and cache directories
+RUN mkdir -p /var/www/html/storage/logs \
+    && mkdir -p /var/www/html/storage/framework/cache \
+    && mkdir -p /var/www/html/storage/framework/sessions \
+    && mkdir -p /var/www/html/storage/framework/views \
+    && mkdir -p /var/www/html/bootstrap/cache
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nestjs -u 1001
+# Set permissions
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html/storage \
+    && chmod -R 755 /var/www/html/bootstrap/cache
 
-# Copy built application
-COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
-COPY --from=builder --chown=nestjs:nodejs /app/node_modules ./node_modules
-COPY --chown=nestjs:nodejs package*.json ./
+# Copy configuration files
+COPY docker/nginx.conf /etc/nginx/sites-available/default
+COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY docker/php.ini /usr/local/etc/php/conf.d/custom.ini
 
-USER nestjs
-
+# Expose port
 EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node dist/health-check.js
+    CMD curl -f http://localhost:8000/health || exit 1
 
-# Start the application
-CMD ["dumb-init", "node", "dist/main"]
+# Start supervisor
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

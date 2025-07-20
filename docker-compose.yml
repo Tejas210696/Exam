@@ -2,20 +2,22 @@ version: '3.8'
 
 services:
   # Databases
-  postgres:
-    image: postgres:15-alpine
-    container_name: jee-postgres
+  mysql:
+    image: mysql:8.0
+    container_name: jee-mysql
     environment:
-      POSTGRES_DB: jee_portal
-      POSTGRES_USER: jee_user
-      POSTGRES_PASSWORD: jee_password
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: jee_portal
+      MYSQL_USER: jee_user
+      MYSQL_PASSWORD: jee_password
     ports:
-      - "5432:5432"
+      - "3306:3306"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./database/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - mysql_data:/var/lib/mysql
+      - ./database/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - jee-network
+    command: --default-authentication-plugin=mysql_native_password
 
   mongodb:
     image: mongo:7
@@ -57,6 +59,21 @@ services:
     networks:
       - jee-network
 
+  # Load Balancer
+  nginx:
+    image: nginx:alpine
+    container_name: jee-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./infrastructure/nginx/sites-available:/etc/nginx/sites-available
+    depends_on:
+      - api-gateway
+    networks:
+      - jee-network
+
   # Monitoring
   prometheus:
     image: prom/prometheus:latest
@@ -89,7 +106,7 @@ services:
     networks:
       - jee-network
 
-  # Services
+  # Laravel Services
   api-gateway:
     build:
       context: ./services/api-gateway
@@ -98,21 +115,24 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - NODE_ENV=development
-      - PORT=8000
-      - POSTGRES_URL=postgresql://jee_user:jee_password@postgres:5432/jee_portal
-      - MONGODB_URL=mongodb://jee_user:jee_password@mongodb:27017/jee_portal
-      - REDIS_URL=redis://redis:6379
-      - RABBITMQ_URL=amqp://jee_user:jee_password@rabbitmq:5672
-      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+      - APP_ENV=development
+      - APP_DEBUG=true
+      - APP_KEY=base64:your-app-key-here
+      - DB_CONNECTION=mysql
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_DATABASE=jee_portal
+      - DB_USERNAME=jee_user
+      - DB_PASSWORD=jee_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - QUEUE_CONNECTION=redis
     depends_on:
-      - postgres
-      - mongodb
+      - mysql
       - redis
-      - rabbitmq
     volumes:
-      - ./services/api-gateway:/app
-      - /app/node_modules
+      - ./services/api-gateway:/var/www/html
+      - /var/www/html/vendor
     networks:
       - jee-network
 
@@ -122,19 +142,25 @@ services:
       dockerfile: Dockerfile
     container_name: jee-auth-service
     ports:
-      - "8001:8001"
+      - "8001:8000"
     environment:
-      - NODE_ENV=development
-      - PORT=8001
-      - POSTGRES_URL=postgresql://jee_user:jee_password@postgres:5432/jee_portal
-      - REDIS_URL=redis://redis:6379
-      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+      - APP_ENV=development
+      - APP_DEBUG=true
+      - APP_KEY=base64:your-app-key-here
+      - DB_CONNECTION=mysql
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_DATABASE=jee_portal
+      - DB_USERNAME=jee_user
+      - DB_PASSWORD=jee_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     depends_on:
-      - postgres
+      - mysql
       - redis
     volumes:
-      - ./services/auth-service:/app
-      - /app/node_modules
+      - ./services/auth-service:/var/www/html
+      - /var/www/html/vendor
     networks:
       - jee-network
 
@@ -144,18 +170,25 @@ services:
       dockerfile: Dockerfile
     container_name: jee-user-service
     ports:
-      - "8002:8002"
+      - "8002:8000"
     environment:
-      - NODE_ENV=development
-      - PORT=8002
-      - POSTGRES_URL=postgresql://jee_user:jee_password@postgres:5432/jee_portal
-      - REDIS_URL=redis://redis:6379
+      - APP_ENV=development
+      - APP_DEBUG=true
+      - APP_KEY=base64:your-app-key-here
+      - DB_CONNECTION=mysql
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_DATABASE=jee_portal
+      - DB_USERNAME=jee_user
+      - DB_PASSWORD=jee_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     depends_on:
-      - postgres
+      - mysql
       - redis
     volumes:
-      - ./services/user-service:/app
-      - /app/node_modules
+      - ./services/user-service:/var/www/html
+      - /var/www/html/vendor
     networks:
       - jee-network
 
@@ -165,20 +198,29 @@ services:
       dockerfile: Dockerfile
     container_name: jee-exam-service
     ports:
-      - "8003:8003"
+      - "8003:8000"
     environment:
-      - NODE_ENV=development
-      - PORT=8003
-      - POSTGRES_URL=postgresql://jee_user:jee_password@postgres:5432/jee_portal
-      - MONGODB_URL=mongodb://jee_user:jee_password@mongodb:27017/jee_portal
-      - REDIS_URL=redis://redis:6379
+      - APP_ENV=development
+      - APP_DEBUG=true
+      - APP_KEY=base64:your-app-key-here
+      - DB_CONNECTION=mysql
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_DATABASE=jee_portal
+      - DB_USERNAME=jee_user
+      - DB_PASSWORD=jee_password
+      - MONGODB_HOST=mongodb
+      - MONGODB_PORT=27017
+      - MONGODB_DATABASE=jee_portal
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     depends_on:
-      - postgres
+      - mysql
       - mongodb
       - redis
     volumes:
-      - ./services/exam-service:/app
-      - /app/node_modules
+      - ./services/exam-service:/var/www/html
+      - /var/www/html/vendor
     networks:
       - jee-network
 
@@ -188,18 +230,22 @@ services:
       dockerfile: Dockerfile
     container_name: jee-question-service
     ports:
-      - "8004:8004"
+      - "8004:8000"
     environment:
-      - NODE_ENV=development
-      - PORT=8004
-      - MONGODB_URL=mongodb://jee_user:jee_password@mongodb:27017/jee_portal
-      - REDIS_URL=redis://redis:6379
+      - APP_ENV=development
+      - APP_DEBUG=true
+      - APP_KEY=base64:your-app-key-here
+      - MONGODB_HOST=mongodb
+      - MONGODB_PORT=27017
+      - MONGODB_DATABASE=jee_portal
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     depends_on:
       - mongodb
       - redis
     volumes:
-      - ./services/question-service:/app
-      - /app/node_modules
+      - ./services/question-service:/var/www/html
+      - /var/www/html/vendor
     networks:
       - jee-network
 
@@ -209,43 +255,55 @@ services:
       dockerfile: Dockerfile
     container_name: jee-submission-service
     ports:
-      - "8005:8005"
+      - "8005:8000"
     environment:
-      - NODE_ENV=development
-      - PORT=8005
-      - MONGODB_URL=mongodb://jee_user:jee_password@mongodb:27017/jee_portal
-      - REDIS_URL=redis://redis:6379
-      - RABBITMQ_URL=amqp://jee_user:jee_password@rabbitmq:5672
+      - APP_ENV=development
+      - APP_DEBUG=true
+      - APP_KEY=base64:your-app-key-here
+      - MONGODB_HOST=mongodb
+      - MONGODB_PORT=27017
+      - MONGODB_DATABASE=jee_portal
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=jee_user
+      - RABBITMQ_PASS=jee_password
     depends_on:
       - mongodb
       - redis
       - rabbitmq
     volumes:
-      - ./services/submission-service:/app
-      - /app/node_modules
+      - ./services/submission-service:/var/www/html
+      - /var/www/html/vendor
     networks:
       - jee-network
 
+  # Native PHP Services
   evaluation-service:
     build:
       context: ./services/evaluation-service
       dockerfile: Dockerfile
     container_name: jee-evaluation-service
     ports:
-      - "8006:8006"
+      - "8006:80"
     environment:
-      - NODE_ENV=development
-      - PORT=8006
-      - POSTGRES_URL=postgresql://jee_user:jee_password@postgres:5432/jee_portal
-      - MONGODB_URL=mongodb://jee_user:jee_password@mongodb:27017/jee_portal
-      - RABBITMQ_URL=amqp://jee_user:jee_password@rabbitmq:5672
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_DATABASE=jee_portal
+      - DB_USERNAME=jee_user
+      - DB_PASSWORD=jee_password
+      - MONGODB_HOST=mongodb
+      - MONGODB_PORT=27017
+      - MONGODB_DATABASE=jee_portal
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     depends_on:
-      - postgres
+      - mysql
       - mongodb
-      - rabbitmq
+      - redis
     volumes:
-      - ./services/evaluation-service:/app
-      - /app/node_modules
+      - ./services/evaluation-service:/var/www/html
     networks:
       - jee-network
 
@@ -255,18 +313,45 @@ services:
       dockerfile: Dockerfile
     container_name: jee-proctor-service
     ports:
-      - "8007:8007"
+      - "8007:80"
     environment:
-      - NODE_ENV=development
-      - PORT=8007
-      - MONGODB_URL=mongodb://jee_user:jee_password@mongodb:27017/jee_portal
-      - REDIS_URL=redis://redis:6379
+      - MONGODB_HOST=mongodb
+      - MONGODB_PORT=27017
+      - MONGODB_DATABASE=jee_portal
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     depends_on:
       - mongodb
       - redis
     volumes:
-      - ./services/proctor-service:/app
-      - /app/node_modules
+      - ./services/proctor-service:/var/www/html
+    networks:
+      - jee-network
+
+  # Queue Workers
+  queue-worker:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: jee-queue-worker
+    command: php artisan queue:work --sleep=3 --tries=3
+    environment:
+      - APP_ENV=development
+      - DB_CONNECTION=mysql
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_DATABASE=jee_portal
+      - DB_USERNAME=jee_user
+      - DB_PASSWORD=jee_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - QUEUE_CONNECTION=redis
+    depends_on:
+      - mysql
+      - redis
+    volumes:
+      - ./services/api-gateway:/var/www/html
+      - /var/www/html/vendor
     networks:
       - jee-network
 
@@ -304,7 +389,7 @@ services:
       - jee-network
 
 volumes:
-  postgres_data:
+  mysql_data:
   mongodb_data:
   redis_data:
   rabbitmq_data:

@@ -1,22 +1,22 @@
-# JEE Online Examination Portal
+# JEE Online Examination Portal (Laravel/PHP)
 
-A comprehensive, production-ready online examination system built with modern microservices architecture, designed for large-scale competitive examinations like JEE.
+A comprehensive, production-ready online examination system built with Laravel microservices architecture, designed for large-scale competitive examinations like JEE.
 
 ## 🏗️ Architecture Overview
 
 This system implements a distributed microservices architecture with the following components:
 
-### Backend Services (NestJS)
-- **API Gateway** - Main entry point, request routing, rate limiting
-- **Auth Service** - User authentication, JWT management, role-based access
-- **User Service** - Student/admin profile management
-- **Exam Service** - Exam creation, scheduling, configuration
-- **Question Service** - Question bank management, categorization
-- **Submission Service** - Answer submission, real-time sync
-- **Evaluation Service** - Automated scoring, result processing
-- **Notification Service** - Email/SMS notifications, alerts
-- **Analytics Service** - Performance metrics, reporting
-- **Proctor Service** - AI-based proctoring, violation detection
+### Backend Services (Laravel/PHP)
+- **API Gateway** - Main entry point, request routing, rate limiting (Laravel)
+- **Auth Service** - User authentication, JWT management, role-based access (Laravel)
+- **User Service** - Student/admin profile management (Laravel)
+- **Exam Service** - Exam creation, scheduling, configuration (Laravel)
+- **Question Service** - Question bank management, categorization (Laravel)
+- **Submission Service** - Answer submission, real-time sync (Laravel)
+- **Evaluation Service** - Automated scoring, result processing (Native PHP)
+- **Notification Service** - Email/SMS notifications, alerts (Laravel)
+- **Analytics Service** - Performance metrics, reporting (Native PHP)
+- **Proctor Service** - AI-based proctoring, violation detection (Native PHP)
 
 ### Frontend (React 18 PWA)
 - **Student Portal** - Exam interface, dashboard, results
@@ -24,13 +24,14 @@ This system implements a distributed microservices architecture with the followi
 - **Proctor Dashboard** - Real-time monitoring, violation alerts
 
 ### Databases
-- **PostgreSQL** - Relational data (users, exams, results)
+- **MySQL** - Relational data (users, exams, results)
 - **MongoDB** - Document storage (questions, submissions)
 - **Redis** - Caching, sessions, real-time data
 
 ### Infrastructure
-- **Kubernetes** - Container orchestration
-- **Terraform** - Infrastructure as Code
+- **Docker** - Container orchestration
+- **Nginx** - Load balancing and reverse proxy
+- **Supervisor** - Process management for queues
 - **GitHub Actions** - CI/CD pipelines
 - **Prometheus & Grafana** - Monitoring and observability
 
@@ -39,8 +40,8 @@ This system implements a distributed microservices architecture with the followi
 - **Scalable Architecture**: Handles 100k+ concurrent users
 - **Real-time Proctoring**: AI-powered face detection and behavior analysis
 - **Secure Exam Environment**: Browser lockdown, screenshot prevention
-- **Auto-scaling**: Kubernetes HPA based on load
-- **High Availability**: Multi-region deployment with failover
+- **Auto-scaling**: Docker Swarm with load balancing
+- **High Availability**: Multi-instance deployment with failover
 - **Comprehensive Testing**: Unit, E2E, and load testing
 - **Rich Analytics**: Performance insights and detailed reporting
 
@@ -50,7 +51,7 @@ This system implements a distributed microservices architecture with the followi
 ```bash
 # Clone and setup
 git clone <repository-url>
-cd jee-examination-portal
+cd jee-examination-portal-laravel
 chmod +x scripts/setup-dev.sh
 ./scripts/setup-dev.sh
 
@@ -66,15 +67,11 @@ docker-compose up -d
 ### Production Deployment
 ```bash
 # Setup infrastructure
-cd infrastructure/terraform
-terraform init
-terraform plan
-terraform apply
+cd infrastructure/docker
+docker-compose -f docker-compose.prod.yml up -d
 
-# Deploy to Kubernetes
-cd ../../k8s
-kubectl apply -f namespace.yaml
-kubectl apply -f .
+# Run migrations and seed data
+docker-compose exec api-gateway php artisan migrate --seed
 ```
 
 ## 📊 Load Testing
@@ -87,11 +84,11 @@ The system is tested to handle:
 
 ## 🔒 Security Features
 
-- JWT-based authentication
+- JWT-based authentication with Laravel Sanctum
 - Role-based access control (RBAC)
-- API rate limiting
-- SQL injection protection
-- XSS prevention
+- API rate limiting with Laravel throttling
+- SQL injection protection with Eloquent ORM
+- XSS prevention with Laravel's built-in protection
 - HTTPS enforcement
 - Data encryption at rest
 
@@ -99,16 +96,16 @@ The system is tested to handle:
 
 - **Prometheus** metrics collection
 - **Grafana** dashboards
-- **ELK Stack** for logging
-- **Jaeger** for distributed tracing
+- **Laravel Telescope** for debugging
+- **Laravel Horizon** for queue monitoring
 - **Health checks** for all services
 
 ## 🧪 Testing
 
-- **Unit Tests**: Jest (90%+ coverage)
+- **Unit Tests**: PHPUnit (90%+ coverage)
+- **Feature Tests**: Laravel Testing
 - **E2E Tests**: Playwright
-- **Load Tests**: k6
-- **Security Tests**: OWASP ZAP
+- **Load Tests**: Apache Bench & k6
 
 ## 📄 License
 
