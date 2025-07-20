@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: jee-portal
+  labels:
+    app: jee-portal
+    environment: production

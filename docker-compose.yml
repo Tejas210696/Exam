@@ -1,0 +1,316 @@
+version: '3.8'
+
+services:
+  # Databases
+  postgres:
+    image: postgres:15-alpine
+    container_name: jee-postgres
+    environment:
+      POSTGRES_DB: jee_portal
+      POSTGRES_USER: jee_user
+      POSTGRES_PASSWORD: jee_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - jee-network
+
+  mongodb:
+    image: mongo:7
+    container_name: jee-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: jee_user
+      MONGO_INITDB_ROOT_PASSWORD: jee_password
+      MONGO_INITDB_DATABASE: jee_portal
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./database/mongodb/init.js:/docker-entrypoint-initdb.d/init.js
+    networks:
+      - jee-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: jee-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - jee-network
+
+  # Message Queue
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: jee-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: jee_user
+      RABBITMQ_DEFAULT_PASS: jee_password
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - jee-network
+
+  # Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: jee-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - jee-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: jee-grafana
+    ports:
+      - "3002:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - jee-network
+
+  # Services
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: jee-api-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - NODE_ENV=development
+      - PORT=8000
+      - POSTGRES_URL=postgresql://jee_user:jee_password@postgres:5432/jee_portal
+      - MONGODB_URL=mongodb://jee_user:jee_password@mongodb:27017/jee_portal
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://jee_user:jee_password@rabbitmq:5672
+      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+    depends_on:
+      - postgres
+      - mongodb
+      - redis
+      - rabbitmq
+    volumes:
+      - ./services/api-gateway:/app
+      - /app/node_modules
+    networks:
+      - jee-network
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: jee-auth-service
+    ports:
+      - "8001:8001"
+    environment:
+      - NODE_ENV=development
+      - PORT=8001
+      - POSTGRES_URL=postgresql://jee_user:jee_password@postgres:5432/jee_portal
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./services/auth-service:/app
+      - /app/node_modules
+    networks:
+      - jee-network
+
+  user-service:
+    build:
+      context: ./services/user-service
+      dockerfile: Dockerfile
+    container_name: jee-user-service
+    ports:
+      - "8002:8002"
+    environment:
+      - NODE_ENV=development
+      - PORT=8002
+      - POSTGRES_URL=postgresql://jee_user:jee_password@postgres:5432/jee_portal
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./services/user-service:/app
+      - /app/node_modules
+    networks:
+      - jee-network
+
+  exam-service:
+    build:
+      context: ./services/exam-service
+      dockerfile: Dockerfile
+    container_name: jee-exam-service
+    ports:
+      - "8003:8003"
+    environment:
+      - NODE_ENV=development
+      - PORT=8003
+      - POSTGRES_URL=postgresql://jee_user:jee_password@postgres:5432/jee_portal
+      - MONGODB_URL=mongodb://jee_user:jee_password@mongodb:27017/jee_portal
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - postgres
+      - mongodb
+      - redis
+    volumes:
+      - ./services/exam-service:/app
+      - /app/node_modules
+    networks:
+      - jee-network
+
+  question-service:
+    build:
+      context: ./services/question-service
+      dockerfile: Dockerfile
+    container_name: jee-question-service
+    ports:
+      - "8004:8004"
+    environment:
+      - NODE_ENV=development
+      - PORT=8004
+      - MONGODB_URL=mongodb://jee_user:jee_password@mongodb:27017/jee_portal
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - mongodb
+      - redis
+    volumes:
+      - ./services/question-service:/app
+      - /app/node_modules
+    networks:
+      - jee-network
+
+  submission-service:
+    build:
+      context: ./services/submission-service
+      dockerfile: Dockerfile
+    container_name: jee-submission-service
+    ports:
+      - "8005:8005"
+    environment:
+      - NODE_ENV=development
+      - PORT=8005
+      - MONGODB_URL=mongodb://jee_user:jee_password@mongodb:27017/jee_portal
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://jee_user:jee_password@rabbitmq:5672
+    depends_on:
+      - mongodb
+      - redis
+      - rabbitmq
+    volumes:
+      - ./services/submission-service:/app
+      - /app/node_modules
+    networks:
+      - jee-network
+
+  evaluation-service:
+    build:
+      context: ./services/evaluation-service
+      dockerfile: Dockerfile
+    container_name: jee-evaluation-service
+    ports:
+      - "8006:8006"
+    environment:
+      - NODE_ENV=development
+      - PORT=8006
+      - POSTGRES_URL=postgresql://jee_user:jee_password@postgres:5432/jee_portal
+      - MONGODB_URL=mongodb://jee_user:jee_password@mongodb:27017/jee_portal
+      - RABBITMQ_URL=amqp://jee_user:jee_password@rabbitmq:5672
+    depends_on:
+      - postgres
+      - mongodb
+      - rabbitmq
+    volumes:
+      - ./services/evaluation-service:/app
+      - /app/node_modules
+    networks:
+      - jee-network
+
+  proctor-service:
+    build:
+      context: ./services/proctor-service
+      dockerfile: Dockerfile
+    container_name: jee-proctor-service
+    ports:
+      - "8007:8007"
+    environment:
+      - NODE_ENV=development
+      - PORT=8007
+      - MONGODB_URL=mongodb://jee_user:jee_password@mongodb:27017/jee_portal
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - mongodb
+      - redis
+    volumes:
+      - ./services/proctor-service:/app
+      - /app/node_modules
+    networks:
+      - jee-network
+
+  # Frontend Applications
+  student-portal:
+    build:
+      context: ./frontend/student-portal
+      dockerfile: Dockerfile
+    container_name: jee-student-portal
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_WS_URL=ws://localhost:8000
+    volumes:
+      - ./frontend/student-portal:/app
+      - /app/node_modules
+    networks:
+      - jee-network
+
+  admin-portal:
+    build:
+      context: ./frontend/admin-portal
+      dockerfile: Dockerfile
+    container_name: jee-admin-portal
+    ports:
+      - "3001:3001"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_WS_URL=ws://localhost:8000
+    volumes:
+      - ./frontend/admin-portal:/app
+      - /app/node_modules
+    networks:
+      - jee-network
+
+volumes:
+  postgres_data:
+  mongodb_data:
+  redis_data:
+  rabbitmq_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  jee-network:
+    driver: bridge
